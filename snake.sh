@@ -4,14 +4,22 @@
 BORDER_LINE='#'
 BORDER_CORNER='#'
 SNAKE_SEGMENT="o"
-TIME_DELTA=1
+TIME_DELTA=0.1
+
+INPUT_FIFO=fifo1
 
 # Global vars
 snake_segments=
 snake_direction=R
 
+function cleanup(){
+  show_cursor
+  remove_on_exit_hook
+  echo "Thank you for playing!"
+}
+
 function main() {
-    add_on_exit_hook "show_cursor; remove_on_exit_hook; echo Thank you for playing!"
+    add_on_exit_hook cleanup
     local rows=$(tput lines)
     local cols=$(tput cols)
     local eraser_str=$(create_empty_str $((cols-2)) " ")
@@ -20,14 +28,29 @@ function main() {
     hide_cursor
     save_cursor_position
     draw_board $rows $cols
+    local input=
     while true; do
+        input=
+        read -t 0.1 -n 1 input
         restore_cursor_position
         clean_board $rows $cols "$eraser_str"
         restore_cursor_position
+        change_snake_direction "$input"
         draw_snake
         move_snake
         sleep $TIME_DELTA
     done
+}
+
+function change_snake_direction() {
+    local input=$1
+
+    case "$input" in
+        w) snake_direction=U;;
+        s) snake_direction=D;;
+        a) snake_direction=L;;
+        d) snake_direction=R;;
+    esac
 }
 
 function save_context() {
@@ -167,6 +190,23 @@ function hide_cursor() {
     tput civis
 }
 
-main
-remove_on_exit_hook
-show_cursor
+function read_input() {
+    (while true;do
+        read -s -n 1 c
+        echo -n $c
+    done)> $INPUT_FIFO
+}
+
+function create_fifo() {
+    mkfifo $INPUT_FIFO
+}
+
+function remove_fifo() {
+    rm $INPUT_FIFO
+}
+
+create_fifo
+(main < $INPUT_FIFO)&
+read_input
+cleanup
+
